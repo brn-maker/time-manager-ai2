@@ -1,5 +1,8 @@
 {
   "dependencies": {
-    "axios": "^1.12.2"
+    "axios": "^1.12.2",
+    "cookie-parser": "^1.4.7",
+    "firebase-admin": "^13.5.0",
+    "paystack": "^2.0.1"
   }
 }

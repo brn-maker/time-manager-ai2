@@ -1,10 +1,20 @@
+
 import OpenAI from "openai";
 import dotenv from "dotenv";
+import { findOrCreateUser, updateUser } from "./dbService.js";
+
 dotenv.config();
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-export async function getAISummary(activities, goals = [], period = 'daily') {
+export async function getAISummary(user_id, activities, goals = [], period = 'daily') {
+  
+  const user = await findOrCreateUser(user_id);
+
+  if (user.aiAnalysisCount <= 0) {
+    throw new Error('You have no AI analysis credits remaining. Please purchase more.');
+  }
+
   const goalsContext = goals.length > 0 ? `
   
   USER'S GOALS:
@@ -72,6 +82,8 @@ export async function getAISummary(activities, goals = [], period = 'daily') {
     model: "gpt-4o-mini",
     messages: [{ role: "user", content: prompt }],
   });
+
+  await updateUser(user_id, { aiAnalysisCount: user.aiAnalysisCount - 1 });
 
   return response.choices[0].message.content;
 }

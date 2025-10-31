@@ -6,13 +6,18 @@ import {
   deleteGoal, 
   getGoalById 
 } from "../services/dbService.js";
+import { protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
+
+// Protect all routes in this file
+router.use(protect);
 
 // Add a new goal
 router.post("/", async (req, res) => {
   try {
-    const { user_id, title, description, category, priority, target_hours_per_week } = req.body;
+    const { title, description, category, priority, target_hours_per_week } = req.body;
+    const user_id = req.user.uid;
     const result = await addGoal(user_id, title, description, category, priority, target_hours_per_week);
     res.json(result);
   } catch (error) {
@@ -21,9 +26,9 @@ router.post("/", async (req, res) => {
 });
 
 // Get all goals for a user
-router.get("/:user_id", async (req, res) => {
+router.get("/", async (req, res) => {
   try {
-    const { user_id } = req.params;
+    const user_id = req.user.uid;
     const result = await getGoals(user_id);
     res.json(result);
   } catch (error) {
@@ -32,9 +37,10 @@ router.get("/:user_id", async (req, res) => {
 });
 
 // Get a specific goal
-router.get("/:user_id/:goal_id", async (req, res) => {
+router.get("/:goal_id", async (req, res) => {
   try {
-    const { user_id, goal_id } = req.params;
+    const { goal_id } = req.params;
+    const user_id = req.user.uid;
     const result = await getGoalById(user_id, goal_id);
     res.json(result);
   } catch (error) {

@@ -1,15 +1,18 @@
 import express from "express";
-import { addActivity, getActivities, getActivitiesByDate, getActivitiesForCalendar, summarizeDay, getGoals, getActivitiesByPeriod, updateActivity, deleteActivity } from "../services/dbService.js";
+import { addActivity, getActivities, getActivitiesByDate, getActivitiesByPeriod, updateActivity, deleteActivity, getGoals } from "../services/dbService.js";
 import { getAISummary } from "../services/aiService.js";
+import { protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
+// Protect all routes in this file
+router.use(protect);
+
 router.post("/", async (req, res) => {
   try {
-    const { 
-      user_id, 
-      activity, 
-      duration, 
+    const {
+      activity,
+      duration,
       date,
       start_date,
       start_time,
@@ -17,11 +20,12 @@ router.post("/", async (req, res) => {
       end_time,
       is_cross_day
     } = req.body;
-    
+    const user_id = req.user.uid; // Get user_id from authenticated user
+
     const result = await addActivity(
-      user_id, 
-      activity, 
-      duration, 
+      user_id,
+      activity,
+      duration,
       date,
       start_date,
       start_time,
@@ -36,9 +40,9 @@ router.post("/", async (req, res) => {
 });
 
 // Get all activities for a user
-router.get("/:user_id", async (req, res) => {
+router.get("/", async (req, res) => {
   try {
-    const { user_id } = req.params;
+    const user_id = req.user.uid; // Get user_id from authenticated user
     const result = await getActivities(user_id);
     res.json(result);
   } catch (error) {
@@ -47,9 +51,10 @@ router.get("/:user_id", async (req, res) => {
 });
 
 // Get activities for a specific date
-router.get("/:user_id/:date", async (req, res) => {
+router.get("/:date", async (req, res) => {
   try {
-    const { user_id, date } = req.params;
+    const { date } = req.params;
+    const user_id = req.user.uid; // Get user_id from authenticated user
     const result = await getActivitiesByDate(user_id, date);
     res.json(result);
   } catch (error) {
@@ -57,16 +62,13 @@ router.get("/:user_id/:date", async (req, res) => {
   }
 });
 
-// Calendar route removed - using regular activities route instead
-
 // Update activity
 router.put("/:activity_id", async (req, res) => {
   try {
     const { activity_id } = req.params;
-    const { 
-      user_id, 
-      activity, 
-      duration, 
+    const {
+      activity,
+      duration,
       date,
       start_date,
       start_time,
@@ -74,12 +76,13 @@ router.put("/:activity_id", async (req, res) => {
       end_time,
       is_cross_day
     } = req.body;
-    
+    const user_id = req.user.uid; // Get user_id from authenticated user
+
     const result = await updateActivity(
       activity_id,
-      user_id, 
-      activity, 
-      duration, 
+      user_id,
+      activity,
+      duration,
       date,
       start_date,
       start_time,
@@ -97,8 +100,8 @@ router.put("/:activity_id", async (req, res) => {
 router.delete("/:activity_id", async (req, res) => {
   try {
     const { activity_id } = req.params;
-    const { user_id } = req.body;
-    
+    const user_id = req.user.uid; // Get user_id from authenticated user
+
     const result = await deleteActivity(activity_id, user_id);
     res.json(result);
   } catch (error) {
@@ -108,18 +111,15 @@ router.delete("/:activity_id", async (req, res) => {
 
 router.post("/summary/ai", async (req, res) => {
   try {
-    const { user_id, period = 'daily', date } = req.body;
-    
-    console.log(`AI Summary request: user_id=${user_id}, period=${period}, date=${date}`);
-    
+    const { period = 'daily', date } = req.body;
+    const user_id = req.user.uid;
+
     // Get user's goals for context
-    const goals = user_id ? await getGoals(user_id) : [];
-    console.log(`Found ${goals?.length || 0} goals for user`);
-    
+    const goals = await getGoals(user_id);
+
     // Get activities for the specified period
     const activities = await getActivitiesByPeriod(user_id, period, date);
-    console.log(`Retrieved ${activities?.length || 0} activities for AI summary`);
-    
+
     if (!activities || activities.length === 0) {
       const periodLabels = {
         'daily': 'today',
@@ -128,19 +128,17 @@ router.post("/summary/ai", async (req, res) => {
         'yearly': 'this year',
         'alltime': 'overall'
       };
-      
-      console.log(`No activities found for ${periodLabels[period] || 'this period'}`);
-      return res.json({ 
-        summary: `No activities found for ${periodLabels[period] || 'this period'}. Add some activities to get personalized insights!` 
+
+      return res.json({
+        summary: `No activities found for ${periodLabels[period] || 'this period'}. Add some activities to get personalized insights!`
       });
     }
-    
-    console.log(`Activities data being sent to AI:`, JSON.stringify(activities, null, 2));
-    const aiResponse = await getAISummary(activities, goals, period);
+
+    const aiResponse = await getAISummary(user_id, activities, goals, period);
     res.json({ summary: aiResponse });
   } catch (error) {
     console.error("AI Summary error:", error);
-    res.status(500).json({ error: error.message });
+    res.status(403).json({ error: error.message }); // Use 403 for permission denied
   }
 });
 
